@@ -21,6 +21,65 @@ type Banker struct {
 	need 		[][]int
 }
 
+func getHeader(m int) (string) {
+	var buffer bytes.Buffer
+	for i := 0; i < m; i++ {
+		buffer.WriteString(string('A' + i) + " ")
+	}
+	return buffer.String()
+}
+
+
+
+func printBanker(banker Banker) {
+	fmt.Println("The Resource Vector is...")
+	fmt.Println(getHeader(banker.M))
+	for i := 0; i < banker.M; i++ {
+		fmt.Printf("%d ", banker.resource[i])
+	}
+	fmt.Println("\n")
+
+	fmt.Println("The Available Vector is...")
+	fmt.Println(getHeader(banker.M))
+	for i := 0; i < banker.M; i++ {
+		fmt.Printf("%d ", banker.available[i])
+	}
+	fmt.Println("\n")
+
+	fmt.Println("The Max Matrix is...")
+	fmt.Println("   " + getHeader(banker.M))
+	for i := 0; i < banker.N; i++ {
+		fmt.Printf("%d:", i)
+		for j := 0; j < banker.M; j++ {
+			fmt.Printf(" %d", banker.max[i][j])
+		}
+		fmt.Println()
+	}
+	fmt.Println()
+
+	fmt.Println("The Allocation Matrix is...")
+	fmt.Println("   " + getHeader(banker.M))
+	for i := 0; i < banker.N; i++ {
+		fmt.Printf("%d:", i)
+		for j := 0; j < banker.M; j++ {
+			fmt.Printf(" %d", banker.allocation[i][j])
+		}
+		fmt.Println()
+	}
+	fmt.Println()
+
+	fmt.Println("The Need Matrix is...")
+	fmt.Println("   " + getHeader(banker.M))
+	for i := 0; i < banker.N; i++ {
+		fmt.Printf("%d:", i)
+		for j := 0; j < banker.M; j++ {
+			fmt.Printf(" %d", banker.need[i][j])
+		}
+		fmt.Println()
+	}
+	fmt.Println()
+}
+
 func handleError(error error) {
 	if error != nil {
 		log.Fatal(error)
@@ -81,65 +140,6 @@ func get_input(splitLines [][]string) (Banker, []int, int) {
 	return Banker{N, M, resource, available, max, allocation, need}, request , initial
 }
 
-func getHeader(m int) (string) {
-	var buffer bytes.Buffer
-	for i := 0; i < m; i++ {
-		buffer.WriteString(string('A' + i) + " ")
-	}
-	return buffer.String()
-}
-
-
-
-func printBanker(banker Banker) {
-	fmt.Println("The Resource Vector is...")
-	fmt.Println(getHeader(banker.M))
-	for i := 0; i < banker.M; i++ {
-		fmt.Printf("%d ", banker.resource[i])
-	}
-	fmt.Println("\n")
-
-	fmt.Println("The Available Vector is...")
-	fmt.Println(getHeader(banker.M))
-	for i := 0; i < banker.M; i++ {
-		fmt.Printf("%d ", banker.available[i])
-	}
-	fmt.Println("\n")
-
-	fmt.Println("The Max Matrix is...")
-	fmt.Println("   " + getHeader(banker.M))
-	for i := 0; i < banker.N; i++ {
-		fmt.Printf("%d:", i)
-		for j := 0; j < banker.M; j++ {
-			fmt.Printf(" %d", banker.max[i][j])
-		}
-		fmt.Println()
-	}
-	fmt.Println()
-
-	fmt.Println("The Allocation Matrix is...")
-	fmt.Println("   " + getHeader(banker.M))
-	for i := 0; i < banker.N; i++ {
-		fmt.Printf("%d:", i)
-		for j := 0; j < banker.M; j++ {
-			fmt.Printf(" %d", banker.allocation[i][j])
-		}
-		fmt.Println()
-	}
-	fmt.Println()
-
-	fmt.Println("The Need Matrix is...")
-	fmt.Println("   " + getHeader(banker.M))
-	for i := 0; i < banker.N; i++ {
-		fmt.Printf("%d:", i)
-		for j := 0; j < banker.M; j++ {
-			fmt.Printf(" %d", banker.need[i][j])
-		}
-		fmt.Println()
-	}
-	fmt.Println()
-}
-
 func addVector(change, keep []int) {
 	for i := range change {
 		change[i] = change[i] + keep[i]
@@ -152,7 +152,7 @@ func subtractVector(change, keep []int) {
 	}
 }
 
-func isLessThan(A, B []int) bool {
+func isLessOrEqualThan(A, B []int) bool {
 	for i := range A {
 		if A[i] > B[i] {
 			return false
@@ -163,8 +163,7 @@ func isLessThan(A, B []int) bool {
 
 func findProcess(banker Banker, work []int, finish []bool) int {
 	for i := range finish {
-		fmt.Println(i, banker.need[i], work, finish[i])
-		if !finish[i] && isLessThan(banker.need[i], work) {
+		if !finish[i] && isLessOrEqualThan(banker.need[i], work) {
 			return i
 		}
 	}
@@ -173,15 +172,22 @@ func findProcess(banker Banker, work []int, finish []bool) int {
 
 func isInSafeState(banker Banker) bool {
 
+	for i := range banker.max {
+		if !isLessOrEqualThan(banker.allocation[i], banker.max[i]) {
+			return false
+		}
+	}
+
 	work := make([]int, banker.M)
 	copy (work, banker.available)
 	finish := make([]bool, banker.N)
+
 	notFinish := true
 	for notFinish {
-		if index := findProcess(banker, work, finish); index >= 0 {
+		index := findProcess(banker, work, finish)
+		if index >= 0 {
 			addVector(work, banker.allocation[index])
 			finish[index] = true
-			fmt.Println(work)
 		} else {
 			notFinish = false
 		}
@@ -198,7 +204,18 @@ func isInSafeState(banker Banker) bool {
 
 func isAllocatable(banker Banker, request []int, initial int) bool {
 	
-	return true
+	// request is greater than available
+	if !isLessOrEqualThan(request, banker.available) {
+		return false
+	}
+
+	// assume the request is granted
+	subtractVector(banker.available, request)
+	addVector(banker.allocation[initial], request)
+	subtractVector(banker.need[initial], request)
+
+	// check if in safe state
+	return isInSafeState(banker)
 }
 
 func main() {
@@ -206,6 +223,7 @@ func main() {
 		fmt.Println("usage: bankerAlgorithm <resoureFile>")
 		os.Exit(2)
 	}
+
 	file, err := os.Open(os.Args[1])
 	handleError(err)
 	defer file.Close()
@@ -238,7 +256,7 @@ func main() {
 			fmt.Println("THE REQUEST CAN BE GRANTED: NEW STATE FOLLOWS\n")
 			printBanker(banker)
 		} else {
-			fmt.Println("THE REQUEST CANNOT BE GRANTED\n")
+			fmt.Println("THE REQUEST CANNOT BE GRANTED")
 		}
 	} else {
 		fmt.Println("THE SYSTEM IS NOT IN A SAFE STATE")
